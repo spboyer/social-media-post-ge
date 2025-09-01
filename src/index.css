@@ -11,6 +11,15 @@
   }
 }
 
+@layer utilities {
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.01 240);

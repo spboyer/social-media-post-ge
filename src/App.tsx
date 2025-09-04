@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useKV } from '@github/spark/hooks'
+import { useKV } from '@/hooks/useAzureData'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Copy, CheckCircle, AlertCircle, Sparkles, History, Search, Trash2, Calendar } from '@phosphor-icons/react'
+import { Copy, CheckCircle, AlertCircle, History, Search, Trash2, Calendar, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 
 type Platform = 'linkedin' | 'instagram' | 'twitter' | 'facebook'
@@ -41,12 +41,14 @@ const platformConfigs: Record<Platform, PlatformConfig> = {
 function App() {
   const [content, setContent] = useState('')
   const [selectedPlatforms, setSelectedPlatforms] = useKV<Platform[]>('selected-platforms', [])
-  const [generatedPosts, setGeneratedPosts] = useState<Record<Platform, string>>({})
+  const [generatedPosts, setGeneratedPosts] = useState<Record<Platform, string>>({} as Record<Platform, string>)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
   const [savedGenerations, setSavedGenerations] = useKV<SavedGeneration[]>('saved-generations', [])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('generate')
+
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '/api'
 
   const handlePlatformToggle = (platform: Platform, checked: boolean) => {
     if (checked) {
@@ -66,9 +68,31 @@ function App() {
   }
 
   const extractContentFromUrl = async (url: string): Promise<string> => {
-    // For demo purposes, we'll simulate URL content extraction
-    // In a real app, you might use a service to extract page content
-    return `Content from ${url}: This is extracted content that would come from the webpage.`
+    try {
+      const response = await fetch(`${apiBaseUrl}/extract-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to extract content: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      
+      if (result.success && result.extractedContent) {
+        return result.extractedContent
+      } else {
+        throw new Error(result.error || 'Failed to extract content')
+      }
+    } catch (error) {
+      console.error('URL extraction error:', error)
+      // Fallback to simple URL description
+      return `Content from ${url}: This content will be analyzed and transformed for social media.`
+    }
   }
 
   const generatePosts = async () => {
@@ -86,35 +110,30 @@ function App() {
         contentToProcess = await extractContentFromUrl(content.trim())
       }
 
-      const posts: Record<Platform, string> = {}
+      // Call Azure Functions chat API with correct payload format
+      const response = await fetch(`${apiBaseUrl}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: contentToProcess,
+          platforms: selectedPlatforms,
+          isUrl
+        }),
+      })
 
-      for (const platform of selectedPlatforms) {
-        const config = platformConfigs[platform]
-        
-        const prompt = spark.llmPrompt`You are a social media expert. Transform the following content into an engaging ${config.name} post that follows the platform's best practices and stays within ${config.maxLength} characters.
-
-Content: ${contentToProcess}
-
-Platform: ${config.name}
-Character limit: ${config.maxLength}
-
-Requirements:
-- Make it engaging and platform-appropriate
-- Use relevant hashtags for ${config.name}
-- Match the tone and style typical for ${config.name}
-- Stay within the character limit
-- For LinkedIn: Professional tone, industry insights, thought leadership
-- For Instagram: Visual storytelling, lifestyle focused, emoji-friendly
-- For X (Twitter): Concise, conversational, trending topics
-- For Facebook: Community-focused, discussion-starting, personal connection
-
-Return only the post content, no explanations.`
-
-        const result = await spark.llm(prompt)
-        posts[platform] = result.trim()
+      if (!response.ok) {
+        throw new Error(`Failed to generate posts: ${response.statusText}`)
       }
 
-      setGeneratedPosts(posts)
+      const result = await response.json()
+      
+      if (!result.success) {
+        throw new Error('Failed to generate posts')
+      }
+
+      setGeneratedPosts(result.posts)
 
       // Save the generation to history
       const newGeneration: SavedGeneration = {
@@ -123,7 +142,7 @@ Return only the post content, no explanations.`
         content: content.trim(),
         isUrl,
         platforms: [...selectedPlatforms],
-        posts
+        posts: result.posts
       }
 
       setSavedGenerations(prev => [newGeneration, ...prev])
@@ -174,10 +193,24 @@ Return only the post content, no explanations.`
     }).format(new Date(timestamp))
   }
 
-  const filteredGenerations = savedGenerations.filter(gen =>
-    gen.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    gen.platforms.some(p => platformConfigs[p].name.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredGenerations = (savedGenerations || []).filter(gen => {
+    // Ensure gen and its properties exist before filtering
+    if (!gen || !gen.content || !gen.platforms) {
+      return false;
+    }
+    
+    // Ensure searchTerm is a string
+    const normalizedSearchTerm = (searchTerm || '').toLowerCase();
+    
+    return (
+      gen.content.toLowerCase().includes(normalizedSearchTerm) ||
+      gen.platforms.some(p => {
+        // Ensure platform exists in config before accessing name
+        const platformConfig = platformConfigs[p];
+        return platformConfig && platformConfig.name.toLowerCase().includes(normalizedSearchTerm);
+      })
+    );
+  })
 
   const canGenerate = content.trim().length > 0 && selectedPlatforms.length > 0
 
@@ -187,11 +220,11 @@ Return only the post content, no explanations.`
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-2">
-            <Sparkles className="text-accent" size={32} />
+            <Zap className="text-accent" size={32} />
             Social Media Post Generator
           </h1>
           <p className="text-muted-foreground">
-            Transform any content into platform-optimized social media posts
+            Transform any content into platform-optimized social media posts powered by Azure AI
           </p>
         </div>
 
@@ -199,7 +232,7 @@ Return only the post content, no explanations.`
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="generate" className="flex items-center gap-2">
-              <Sparkles size={16} />
+              <Zap size={16} />
               Generate Posts
             </TabsTrigger>
             <TabsTrigger value="history" className="flex items-center gap-2">
@@ -285,7 +318,7 @@ Return only the post content, no explanations.`
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2" size={20} />
+                    <Zap className="mr-2" size={20} />
                     Generate Posts
                   </>
                 )}

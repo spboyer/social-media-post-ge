@@ -24,11 +24,64 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment files
 .env
+.env.production
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Azure Development
+.azure/
+*.bicep.log
+*.parameters.local.json
+
+# Azurite storage emulator files
+__azurite_db_blob__.json
+__azurite_db_blob_extent__.json
+__azurite_db_queue__.json
+__azurite_db_queue_extent__.json
+__azurite_db_table__.json
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+AzuriteConfig
+
+# Azure Functions
+api/local.settings.json
+**/local.settings.json
+api/bin/
+api/obj/
+
+# Temporary files
 **/agent-eval-report*
 packages
 pids
 .file-manifest
 .devcontainer/
-
 .spark-workbench-id
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Icon?
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Build artifacts
+*.tgz
+*.tar.gz
+coverage/
+.nyc_output/
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+
+# Azure CLI
+.azure-cli/

@@ -1,0 +1,36 @@
+name: social-media-post-generator
+metadata:
+  template: social-media-post-generator@0.1.0-azd
+
+hooks:
+  postprovision:
+    shell: sh
+    run: |
+      echo "VITE_API_URL=$API_BASE_URL/api" > .env.production
+      echo "VITE_ENVIRONMENT=$AZURE_ENV_NAME" >> .env.production
+      echo "Environment file created for frontend build"
+      cat .env.production
+
+services:
+  web:
+    project: ./
+    language: js
+    host: staticwebapp
+    dist: dist
+
+  api:
+    project: ./api
+    language: js
+    host: function
+    env:
+      AZURE_OPENAI_ENDPOINT: "{{ .Env.AZURE_OPENAI_ENDPOINT }}"
+      AZURE_OPENAI_GPT_DEPLOYMENT: "{{ .Env.AZURE_OPENAI_GPT_DEPLOYMENT }}"
+      AZURE_OPENAI_GPT_MINI_DEPLOYMENT: "{{ .Env.AZURE_OPENAI_GPT_MINI_DEPLOYMENT }}"
+      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: "{{ .Env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}"
+      COSMOS_DB_ENDPOINT: "{{ .Env.COSMOS_DB_ENDPOINT }}"
+      COSMOS_DB_DATABASE: "{{ .Env.COSMOS_DB_DATABASE }}"
+      COSMOS_DB_CONTAINER: "{{ .Env.COSMOS_DB_CONTAINER }}"
+
+infra:
+  provider: bicep
+  path: infra
